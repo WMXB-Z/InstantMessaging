@@ -12,11 +12,24 @@ public:
     bool CheckPwd(const std::string& name, const std::string& pwd, UserInfo& userInfo);
     std::shared_ptr<UserInfo> GetUser(int uid);
     std::shared_ptr<UserInfo> GetUser(std::string name);
-    bool AddFriendApply(const int& from, const int& to);
+    bool AddFriendApply(const int& from, const int& to, const std::string& desc, const std::string& back_name);
     bool AuthFriendApply(const int& from, const int& to);
-    bool AddFriend(const int& from, const int& to, std::string back_name);
+    bool AddFriend(const int& from, const int& to, std::string back_name, std::vector<std::shared_ptr<AddFriendMsg>>& msg_list);
     bool GetApplyList(int touid, std::vector<std::shared_ptr<ApplyInfo>>& applyList, int begin, int limit = 10);
     bool GetFriendList(int self_id, std::vector<std::shared_ptr<UserInfo> >& user_info);
+
+    bool GetUserThreads(int64_t userId,
+        int64_t lastId,
+        int      pageSize,
+        std::vector<std::shared_ptr<ChatThreadInfo>>& threads,
+        bool& loadMore,
+        int& nextLastId);
+
+    bool CreatePrivateChat(int user1_id, int user2_id, int& thread_id);
+    std::shared_ptr<PageResult> LoadChatMsg(int threadId, int lastId, int pageSize);
+    bool AddChatMsg(std::vector<std::shared_ptr<ChatMessage>>& chat_datas);
+    bool AddChatMsg(std::shared_ptr<ChatMessage> chat_data);
+    std::shared_ptr<ChatMessage> GetChatMsg(int message_id);
 private:
     MysqlMgr();
     MysqlDao  _dao;

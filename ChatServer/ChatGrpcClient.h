@@ -18,6 +18,7 @@ using grpc::ClientContext;
 
 using message::AddFriendReq;
 using message::AddFriendRsp;
+using message::AddFriendMsg;
 
 using message::AuthFriendReq;
 using message::AuthFriendRsp;
@@ -35,7 +36,7 @@ using message::KickUserReq;
 using message::KickUserRsp;
 class ChatConPool {
 public:
-	ChatConPool(int poolsize, std::string host, std::string port) :b_stop_(false),poolSize_(poolsize),host_(host),port_(port) {
+	ChatConPool(size_t poolsize, std::string host, std::string port) :b_stop_(false),poolSize_(poolsize),host_(host),port_(port) {
 		for (int i = 0; i < poolSize_; ++i) {
 			std::shared_ptr < Channel > channel = grpc::CreateChannel(host_+":"+port_,grpc::InsecureChannelCredentials());
 			connections_.push(ChatService::NewStub(channel));
@@ -92,15 +93,15 @@ class ChatGrpcClient:public Singleton<ChatGrpcClient>
 	friend class Singleton<ChatGrpcClient>;
 public:
 	~ChatGrpcClient() {}
-	//¿ç·ş×ª·¢¡°·¢Æğ¼ÓºÃÓÑÉêÇë¡±
+	//è·¨æœè½¬å‘â€œå‘èµ·åŠ å¥½å‹ç”³è¯·â€
 	AddFriendRsp NotifyAddFriend(std::string server_ip, const AddFriendReq& req);
-	//¿ç·ş×ª·¢¡°ÉóºË/Í¬Òâ/¾Ü¾øºÃÓÑÉêÇë¡±¡£
+	//è·¨æœè½¬å‘â€œå®¡æ ¸/åŒæ„/æ‹’ç»å¥½å‹ç”³è¯·â€ã€‚
 	AuthFriendRsp NotifyAuthFriend(std::string server_ip, const AuthFriendReq& req);
-	//²éÑ¯ÓÃ»§»ù´¡ĞÅÏ¢
+	//æŸ¥è¯¢ç”¨æˆ·åŸºç¡€ä¿¡æ¯
 	bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo);
-	//¿ç·şÍ¶µİÒ»ÌõÎÄ±¾ÏûÏ¢
+	//è·¨æœæŠ•é€’ä¸€æ¡æ–‡æœ¬æ¶ˆæ¯
 	TextChatMsgRsp NotifyTextChatMsg(std::string server_ip, const TextChatMsgReq& req, const Json::Value& rtvalue);
-	//¿ç·şÌßÈË
+	//è·¨æœè¸¢äºº
 	KickUserRsp NotifyKickUser(std::string server_ip, const KickUserReq& req);
 private:
 	ChatGrpcClient();

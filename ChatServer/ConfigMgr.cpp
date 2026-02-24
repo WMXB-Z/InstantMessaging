@@ -26,7 +26,7 @@ ConfigMgr::ConfigMgr() {
 		sectionInfo._section_datas = section_cofig;
 		_config_map[section_name] = sectionInfo;
 	}
-	// Êä³öËùÓÐµÄsectionºÍkey-value¶Ô  
+	// è¾“å‡ºæ‰€æœ‰çš„sectionå’Œkey-valueå¯¹  
 	for (const auto& section_entry : _config_map) {
 		const std::string& section_name = section_entry.first;
 		SectionInfo section_config = section_entry.second;

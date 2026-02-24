@@ -13,12 +13,12 @@ public:
 	CServer(boost::asio::io_context& io_context, short port);
 	~CServer();
 	void ClearSession(std::string);
-	//根据uid获取session
-	/*std::shared_ptr<CSession> GetSession(std::string);
+	//鏍规嵁uid鑾峰彇session
+	//std::shared_ptr<CSession> GetSession(std::string);
 	bool CheckValid(std::string);
 	void on_timer(const boost::system::error_code& ec);
 	void StartTimer();
-	void StopTimer();*/
+	void StopTimer();
 private:
 	void HandleAccept(std::shared_ptr<CSession> new_session, const boost::system::error_code& error);
 	void StartAccept();
@@ -27,7 +27,9 @@ private:
 	tcp::acceptor _acceptor;
 	std::map<std::string, std::shared_ptr<CSession>> _sessions;
 	std::mutex _mutex;
-	/*boost::asio::steady_timer _timer;*/
+	boost::asio::steady_timer _timer;
+	
+	
 };
 
 

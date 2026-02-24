@@ -63,4 +63,4 @@ pnpm-debug.log*
 **/libssl-*.dll
 **/libcrypto-*.dll
 
-
+clean_vs_build.bat

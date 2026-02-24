@@ -5,6 +5,7 @@
 #include <json/reader.h>
 #include "LogicSystem.h"
 #include "CServer.h"
+#include "RedisMgr.h"
 CSession::CSession(boost::asio::io_context& io_context, CServer* server) :
     _socket(io_context), _server(server), _b_close(false), _b_head_parse(false) 
 {
@@ -52,7 +53,7 @@ void CSession::Send(char* msg, short max_length, short msgid)
         std::cout << "session:  " << _session_id<<"send que fulled " << std::endl;
         return;
     }
-    _send_que.push(std::make_shared<SendNode>(msg, max_length, msgid));//maxlenÊÇÊı¾İµÄ³¤¶È ²»°üÀ¨Í·²¿
+    _send_que.push(std::make_shared<SendNode>(msg, max_length, msgid));//maxlenæ˜¯æ•°æ®çš„é•¿åº¦ ä¸åŒ…æ‹¬å¤´éƒ¨
     if (send_que_size > 0) {
         return;
     }
@@ -80,6 +81,7 @@ void CSession::Send(std::string msg, short msgid)
 
 void CSession::Close()
 {
+    std::lock_guard<std::mutex> lock(_session_mtx);
     _socket.close();
     _b_close = true;
 }
@@ -97,13 +99,18 @@ void CSession::AsyncReadBody(int length)
             if (ec) {
                 std::cout << "handle read failed error is " << ec.what() << std::endl;
                 Close();
-                _server->ClearSession(_session_id);
+                //åŠ åˆ†å¸ƒå¼é”æ¸…é™¤session
+                DealExceptionSession();
                 return;
             }
-            if (bytes_transfered < length) {//Õâ¸öÌõ¼ş²»»á´¥·¢
+            if (bytes_transfered < length) {//è¿™ä¸ªæ¡ä»¶ä¸ä¼šè§¦å‘
                 std::cout << "read length not match read [" << bytes_transfered << "], total [" << HEAD_TOTAL_LEN << "]" << std::endl;
                 Close();
                 _server->ClearSession(_session_id);
+                return;
+            }
+            if (!_server->CheckValid(_session_id)) {
+                Close();
                 return;
             }
             memcpy(_recv_msg_node->_data, _data, bytes_transfered);
@@ -113,38 +120,46 @@ void CSession::AsyncReadBody(int length)
 
             LogicSystem::GetInstance()->PostMsgToQue(std::make_shared<LogicNode>(self, _recv_msg_node));
             AsyncReadHead(HEAD_TOTAL_LEN);
+            UpdateHeartbeat();
         }
         catch (std::exception& e) {
             std::cout << "Exception code is" << e.what() << std::endl;
         }
         });
 }
-//head £º  msg_id   msg_len
+//head ï¼š  msg_id   msg_len
 void CSession::AsyncReadHead(int total_len)
 {
-    auto self = shared_from_this();//ÓëÆäËû¹²ÏíÖ¸Õë¹²ÏíÒıÓÃ¼ÆÊı
-    //²¶»ñ self µÄÄ¿µÄ£º±£Ö¤»Øµ÷Ö´ĞĞÊ±¶ÔÏó»¹»î×Å
-    //²¶»ñ this Ö»ÊÇÎªÁË»Øµ÷ÄÚ²¿¿ÉÒÔÖ±½ÓĞ´£º_recv_node / _socket / AsyncReadBody(...) Ö®ÀàµÄ³ÉÔ±
+    auto self = shared_from_this();//ä¸å…¶ä»–å…±äº«æŒ‡é’ˆå…±äº«å¼•ç”¨è®¡æ•°
+    //æ•è· self çš„ç›®çš„ï¼šä¿è¯å›è°ƒæ‰§è¡Œæ—¶å¯¹è±¡è¿˜æ´»ç€
+    //æ•è· this åªæ˜¯ä¸ºäº†å›è°ƒå†…éƒ¨å¯ä»¥ç›´æ¥å†™ï¼š_recv_node / _socket / AsyncReadBody(...) ä¹‹ç±»çš„æˆå‘˜
     asyncReadFull(HEAD_TOTAL_LEN, [self, this](const boost::system::error_code& ec, std::size_t bytes_transfered) {
         try {
             if (ec) {
                 std::cout << "handle read failed error is " << ec.what() << std::endl;
                 Close();
-                _server->ClearSession(_session_id);
+                //åŠ åˆ†å¸ƒå¼é”æ¸…é™¤session
+                DealExceptionSession();
                 return;
             }
-            if (bytes_transfered < HEAD_TOTAL_LEN) {//Õâ¸öÌõ¼ş²»»á´¥·¢
+            if (bytes_transfered < HEAD_TOTAL_LEN) {//è¿™ä¸ªæ¡ä»¶ä¸ä¼šè§¦å‘
                 std::cout << "read length not match read [" << bytes_transfered << "], total [" << HEAD_TOTAL_LEN << "]" << std::endl;
                 Close();
                 _server->ClearSession(_session_id);
                 return;
             }
+
+            if (!_server->CheckValid(_session_id)) {
+                Close();
+                return;
+            }
+
             _recv_head_node->Clear();
             memcpy(_recv_head_node->_data, _data, bytes_transfered);
 
             short msg_id = 0;
             memcpy(&msg_id, _recv_head_node->_data, HEAD_ID_LEN);
-            //ÍøÂç×Ö½ÚĞò ×ª»¯Îª±¾µØ×Ö½ÚĞò
+            //ç½‘ç»œå­—èŠ‚åº è½¬åŒ–ä¸ºæœ¬åœ°å­—èŠ‚åº
             msg_id = boost::asio::detail::socket_ops::network_to_host_short(msg_id);
             std::cout << "msg_id is " << msg_id << std::endl;
             if (msg_id > MAX_LENGTH) {
@@ -164,6 +179,7 @@ void CSession::AsyncReadHead(int total_len)
 
             _recv_msg_node = std::make_shared<RecvNode>(msg_len, msg_id);
             AsyncReadBody(msg_len);
+            UpdateHeartbeat();
         }
         catch (std::exception& e) {
             std::cout << "Execption code is " << e.what() << std::endl;
@@ -172,26 +188,56 @@ void CSession::AsyncReadHead(int total_len)
         });
 
 }
-//¶ÁÈ¡ÍêÕû³¤¶È  ÎªÊ²Ã´Òª·Ö³ÉÁ½¸öº¯Êı£¿
+void CSession::NotifyOffline(int uid)
+{
+    Json::Value  rtvalue;
+    rtvalue["error"] = ErrorCodes::Success;
+    rtvalue["uid"] = uid;
+
+
+    std::string return_str = rtvalue.toStyledString();
+
+    Send(return_str, ID_NOTIFY_OFF_LINE_REQ);
+    return;
+}
+
+bool CSession::IsHeartbeatExpired(std::time_t& now) {
+    double diff_sec = std::difftime(now, _last_heartbeat);
+    if (diff_sec > HEART_THRESHOLD) {
+        std::cout << "heartbeat expired, session id is  " << _session_id << std::endl;
+        return true;
+    }
+
+    return false;
+}
+
+void CSession::UpdateHeartbeat()
+{
+    time_t now = std::time(nullptr);
+    _last_heartbeat = now;
+}
+
+//è¯»å–å®Œæ•´é•¿åº¦  ä¸ºä»€ä¹ˆè¦åˆ†æˆä¸¤ä¸ªå‡½æ•°ï¼Ÿ
 void CSession::asyncReadFull(std::size_t maxLength, std::function<void(const boost::system::error_code&, std::size_t)> handler)
 {
     memset(_data, 0, MAX_LENGTH);
     asyncReadLen(0, maxLength, handler);
 }
-//¶ÁÈ¡Ö¸¶¨×Ö½ÚÊı
+//è¯»å–æŒ‡å®šå­—èŠ‚æ•°
 void CSession::asyncReadLen(std::size_t read_len, std::size_t total_len, 
     std::function<void(const boost::system::error_code&, std::size_t)> handler)
 {
     auto self = shared_from_this();
-    //´Ó socket ¶ÁÒ»²¿·ÖÊı¾İ£¨ÓĞ¶àÉÙ¶Á¶àÉÙ£¬µ«²»»á³¬¹ıÄãÌá¹©µÄ buffer ÈİÁ¿£©
+    //ä» socket è¯»ä¸€éƒ¨åˆ†æ•°æ®ï¼ˆæœ‰å¤šå°‘è¯»å¤šå°‘ï¼Œä½†ä¸ä¼šè¶…è¿‡ä½ æä¾›çš„ buffer å®¹é‡ï¼‰
     _socket.async_read_some(boost::asio::buffer(_data + read_len, total_len - read_len),
         [read_len,total_len,handler,self](const boost::system::error_code& ec, std::size_t bytes_transfered) {
+            //è¿™é‡Œæ•è·session  å°±ç®—Clearè¿æ¥ ä¹Ÿåªæ˜¯å¼•ç”¨è®¡æ•°-1ï¼›
             if (ec) {
                 handler(ec, read_len + bytes_transfered);
                 return;
             }
-            if (read_len + bytes_transfered >= total_len) {//²»»á´óÓÚ
-                //³¤¶È¹»ÁË ¾Íµ÷ÓÃ»Øµ÷º¯Êı
+            if (read_len + bytes_transfered >= total_len) {//ä¸ä¼šå¤§äº
+                //é•¿åº¦å¤Ÿäº† å°±è°ƒç”¨å›è°ƒå‡½æ•°
                 handler(ec, read_len + bytes_transfered);
                 return;
             }
@@ -214,8 +260,8 @@ void CSession::HandleWrite(const boost::system::error_code& error, std::shared_p
         else {
             std::cout << "handle write failed ,error is " << error.what() << std::endl;
             Close();
-            _server->ClearSession(_session_id);
-    }
+            DealExceptionSession();
+        }
     }
     catch (std::exception &e) {
         std::cout << "Exception code :" << e.what() << std::endl;
@@ -225,4 +271,37 @@ void CSession::HandleWrite(const boost::system::error_code& error, std::shared_p
 LogicNode::LogicNode(std::shared_ptr<CSession>session, std::shared_ptr<RecvNode>recvnode):_session(session),_recvnode(recvnode)
 {
 
+}
+void CSession::DealExceptionSession()
+{
+    auto self = shared_from_this();
+    //åŠ é”æ¸…é™¤session
+    auto uid_str = std::to_string(_user_uid);
+    auto lock_key = LOCK_PREFIX + uid_str;
+    auto identifier = RedisMgr::GetInstance()->acquireLock(lock_key, LOCK_TIME_OUT, ACQUIRE_TIME_OUT);
+    Defer defer([identifier, lock_key, self, this]() {
+        _server->ClearSession(_session_id);
+        RedisMgr::GetInstance()->releaseLock(lock_key, identifier);
+        });
+
+    if (identifier.empty()) {
+        return;
+    }
+    std::string redis_session_id = "";
+    auto bsuccess = RedisMgr::GetInstance()->Get(USER_SESSION_PREFIX + uid_str, redis_session_id);
+    if (!bsuccess) {
+        return;
+    }
+
+    if (redis_session_id != _session_id) {
+        //è¯´æ˜æœ‰å®¢æˆ·åœ¨å…¶ä»–æœåŠ¡å™¨å¼‚åœ°ç™»å½•äº†
+        return;
+    }
+    //æ¸…é™¤ç”¨æˆ·è¿æ¥ä¿¡æ¯
+    RedisMgr::GetInstance()->Del(USER_SESSION_PREFIX + uid_str);
+    //æ¸…é™¤ç”¨æˆ·ç™»å½•ä¿¡æ¯
+    RedisMgr::GetInstance()->Del(USERIPPREFIX + uid_str);
+    //æ¸…é™¤ç”¨æˆ·tokenä¿¡æ¯
+    std::string token_key = USERTOKENPREFIX + uid_str;
+    RedisMgr::GetInstance()->Del(token_key);
 }

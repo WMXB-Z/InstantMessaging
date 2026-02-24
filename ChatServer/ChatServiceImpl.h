@@ -40,7 +40,7 @@ public:
 
 	bool GetBaseInfo(std::string base_key, int uid, std::shared_ptr<UserInfo>& userinfo);
 
-	//接受rpc踢人请求
+	//鎺ュ彈rpc韪汉璇锋眰
 	Status NotifyKickUser(::grpc::ServerContext* context,
 		const KickUserReq* request, KickUserRsp* response) override;
 
