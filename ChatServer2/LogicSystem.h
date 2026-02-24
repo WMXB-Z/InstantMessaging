@@ -13,6 +13,7 @@
 #include <unordered_map>
 //#include "data.h"
 #include "MysqlMgr.h"
+#include "CServer.h"
 
 class CServer;
 typedef  std::function<void(std::shared_ptr<CSession>, const short& msg_id, const std::string& msg_data)> FunCallBack;
@@ -32,7 +33,7 @@ private:
 	void AddFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 	void AuthFriendApply(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 	void DealChatTextMsg(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
-	//void HeartBeatHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
+	void HeartBeatHandler(std::shared_ptr<CSession> session, const short& msg_id, const std::string& msg_data);
 	bool isPureDigit(const std::string& str);
 	void GetUserByUid(std::string uid_str, Json::Value& rtvalue);
 	void GetUserByName(std::string name, Json::Value& rtvalue);
@@ -45,7 +46,7 @@ private:
 	std::condition_variable _consume;
 	bool _b_stop;
 	std::map<short, FunCallBack> _fun_callbacks;
-	/*std::shared_ptr<CServer> _p_server;*/
+	std::shared_ptr<CServer> _p_server;
 };
 
 

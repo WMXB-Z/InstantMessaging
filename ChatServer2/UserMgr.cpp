@@ -34,7 +34,7 @@ void UserMgr::RmvUserSession(int uid, std::string session_id)
 		}
 
 		auto session_id_ = iter->second->GetSessionId();
-		//不相等说明是其他地方登录了
+		//不相等说明是其他地方登录了 A在线 B强行登录 清除了session 写入map  然后a执行断线回调，sessionid不同 不用删除
 		if (session_id_ != session_id) {
 			return;
 		}

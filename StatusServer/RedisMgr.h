@@ -37,6 +37,10 @@ public:
     bool Del(const std::string& key);
     bool ExistsKey(const std::string& key);
     void Close();
+    std::string acquireLock(const std::string& lockName, int lockTimeout, int acquireTimeout);
+    bool releaseLock(const std::string& lockName, const std::string& identifier);
+    void InitCount(std::string server_name);
+    void DelCount(std::string server_name);
 private:
     RedisMgr();
 
