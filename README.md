@@ -33,5 +33,3 @@
 - Boost.Asio（网络 IO）
 
 ------
-
-![1](./images/1.png)
